@@ -1,0 +1,43 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+__pypackages__/
+
+# System files
+.DS_Store # macOS
+Thumbs.db # Windows
+
+# Editor/IDE-specific files
+.idea/
+.vscode/
+*.swp # Vim swap files
+.cache/
+
+# Test and coverage artifacts
+.pytest_cache/
+htmlcov/
+.coverage*
+coverage.xml
+
+# Distribution/packaging
+dist/
+build/
+*.egg-info/
+
+# FastAPI specific
+site/ # Documentation build directory
+log.txt # Example log file
+
+# Environment variables and secrets (CRITICAL for security)
+.env
+.flaskenv
+secrets.txt
+api_key.txt
+*.sqlite3
