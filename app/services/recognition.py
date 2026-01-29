@@ -3,16 +3,17 @@
 import asyncio
 import httpx
 from PIL import Image
+from app.core.config import settings
 import io
 
 class RecognitionService:
     """
     인식 모델 기반 알약 식별 서비스
     """
-    def __init__(self, hf_token: str):
+    def __init__(self):
         # Hugging Face API 설정
-        self.api_url = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
-        self.headers = {"Authorization": f"Bearer {hf_token}"}
+        self.api_url = settings.HUGGING_MODEL_URL
+        self.headers = {"Authorization": f"Bearer {settings.HF_TOKEN}"}
 
     async def _classify_one(self, client: httpx.AsyncClient, image_bytes: bytes):
         """개별 알약 식별요청(내부용)
@@ -45,12 +46,12 @@ class RecognitionService:
         Returns:
             results: 검출된 이미지의 알약 명 리스트
         """
-        async with httpx.AsyncClinet() as client :
+        async with httpx.AsyncClient() as client :
             tasks = []
             for img in pill_images :
                 buf = io.BytesIO()
                 img.save(buf, format = 'JPEG')
                 tasks.append(self._classify_one(client, buf.getvalue()))
 
-            results = await asyncio.gether(*tasks)
+            results = await asyncio.gather(*tasks)
             return results

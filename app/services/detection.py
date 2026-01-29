@@ -2,6 +2,7 @@
 from ultralytics import YOLO
 from PIL import Image
 from datetime import datetime
+from app.core.config import settings
 import io, os, logging
 
 logger = logging.getLogger("uvicorn.error")
@@ -11,14 +12,14 @@ class DetectionService :
     YOLO 모델 기반 알약 객체 탐지 서비스
     """
 
-    def __init__(self, model_path: str, base_save_dir: str = "data/learning_dataset") :
+    def __init__(self) :
         try:
-            self.model = YOLO(model_path)
-            logger.info(f"모델 로드 완료: {model_path}")
+            self.model = YOLO(settings.MODEL_PATH)
+            logger.info(f"모델 로드 완료: {settings.MODEL_PATH}")
             
-            self.base_save_dir = base_save_dir
-            self.origin_dir = os.path.join(base_save_dir, "originals")
-            self.crop_dir = os.path.join(base_save_dir, "crops")
+            self.base_save_dir = settings.SAVE_DIR
+            self.origin_dir = os.path.join(self.base_save_dir, "originals")
+            self.crop_dir = os.path.join(self.base_save_dir, "crops")
 
             for path in [self.origin_dir, self.crop_dir] :
                 if not os.path.exists(path) :
@@ -28,7 +29,7 @@ class DetectionService :
             logger.error(f"모델 로드 실패: {str(e)}")
             raise e
         
-    def _get_detections(self, image: Image.Image, conf: float = 0.45) :
+    def _get_detections(self, image: Image.Image, conf: float = 0.4) :
         """모델 기반으로 탐지된 알약의 좌표 리스트를 반환(내부 호출 용)
 
         Args:
@@ -39,6 +40,8 @@ class DetectionService :
             list: 탐지된 알약들의 좌표 정보 [[x1, y1, x2, y2], ...] 리스트.
         """
         results = self.model.predict(image, conf = conf)
+        for r in results:
+            print(f"인식된 후보들의 점수: {r.boxes.conf}")
 
         return [box.xyxy[0].tolist() for r in results for box in r.boxes]
     
@@ -65,8 +68,13 @@ class DetectionService :
         """
         try : 
             image = Image.open(io.BytesIO(image_bytes))
+
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+                logger.info(f"이미지 모드 변환 완료: {image.mode}")
+
             request_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-            logger.info("이미지 수신 완료")
+            logger.info("이미지 수신 및 변환 완료")
 
             boxes = self._get_detections(image)
             crops = self._crop_detections(image, boxes)

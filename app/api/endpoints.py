@@ -1,16 +1,19 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services.detection import DetectionService
 from app.services.recognition import RecognitionService
-import logging
+from app.services.search import SearchService
+from app.schemas.pill import AnalazePillResponse
+import asyncio, logging
 
 router = APIRouter()
 
-detection_service = DetectionService("app/models/best.pt")
-recognization_service = RecognitionService(hf_token)
+detection_service = DetectionService()
+recognization_service = RecognitionService()
+search_service = SearchService()
 
 logger = logging.getLogger("uvicorn.error")
 
-@router.post("/pills/analyzation")
+@router.post("/pills/analyzation", response_model = AnalazePillResponse)
 async def analyze_pill(file: UploadFile = File(...)) :
     """알약 분석 엔드포인트
 
@@ -20,28 +23,23 @@ async def analyze_pill(file: UploadFile = File(...)) :
     Returns:
         json 응답
     """
-    crops_images = detection_service.detection_process(file)
-    if not crops_image :
+    image_bytes = await file.read()
+    crops_images = detection_service.detection_process(image_bytes)
+    if not crops_images :
         logger.warning("탐지된 알약이 없습니다")
-        return {"status": "success", "message": "탐지된 알약이 없습니다.", "pills": []}
+        return AnalazePillResponse(status="success", total_count=0, pills=[])
     
-    pill_names = await recognization_service.recognize_all(crops_images)
+    recognition_results = await recognization_service.recognize_all(crops_images)
 
-    # 식약처 API 연동 필요
+    tasks = [search_service.get_enriched_pill_data(res) for res in recognition_results]
+    final_pills = await asyncio.gather(*tasks)
 
-    final_pills = []
-    for i, res in enumerate(pill_names) :
-        final_pills.append({
-            "pill_index": i,
-            "pill_name": res.get("label"),
-            "confidence": res.get("score")
-        })
+    return AnalazePillResponse(
+        status = "success",
+        total_count = len(final_pills),
+        pill_details = final_pills
+    )
 
-    return {
-        "status": "success",
-        "total_detected": len(pill_names),
-        "pills": final_pills
-    }
 
 
 @router.post("/pills/detect")
