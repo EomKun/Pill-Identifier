@@ -11,15 +11,19 @@ class DetectionService :
     YOLO 모델 기반 알약 객체 탐지 서비스
     """
 
-    def __init__(self, model_path: str, save_dir: str = "data/temp_crops") :
+    def __init__(self, model_path: str, base_save_dir: str = "data/learning_dataset") :
         try:
             self.model = YOLO(model_path)
             logger.info(f"모델 로드 완료: {model_path}")
-            self.save_dir = save_dir
+            
+            self.base_save_dir = base_save_dir
+            self.origin_dir = os.path.join(base_save_dir, "originals")
+            self.crop_dir = os.path.join(base_save_dir, "crops")
 
-            # 저장 폴더가 없으면 생성
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
+            for path in [self.origin_dir, self.crop_dir] :
+                if not os.path.exists(path) :
+                    os.makedirs(path)
+
         except Exception as e:
             logger.error(f"모델 로드 실패: {str(e)}")
             raise e
@@ -51,39 +55,28 @@ class DetectionService :
         return [image.crop(box) for box in boxes]
     
     def detection_process(self, image_bytes: bytes) :
-        """객체 탐지 프로세싱
+        """객체 탐지 및 학습용 데이터 자동 저장
 
         Args: 
-            image_bytes: 
+            image_bytes(bytes): 바이트화 된 이미지
         
         Returns:
-            crops(list): 
+            crops(list): 인식 서비스로 넘길 크롭된 이미지 객체 리스트
         """
         try : 
             image = Image.open(io.BytesIO(image_bytes))
+            request_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             logger.info("이미지 수신 완료")
 
             boxes = self._get_detections(image)
             crops = self._crop_detections(image, boxes)
-            logger.info(f"탐지 결과 {len(boxes)}의 객체 발견")
-
-            """
-            해당 부분은 나중에 삭제 예정
-            """
-            saved_paths = []
-            request_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            logger.info(f"ID: {request_id} | {len(boxes)}개 객체 탐지 및 저장 시작")
 
             for i, crop in enumerate(crops):
-                # 파일명 형식: 20240522_1430_0.jpg
-                file_name = f"{request_id}_{i}.jpg"
-                file_path = os.path.join(self.save_dir, file_name)
-                
-                # 실제 파일 저장
-                crop.save(file_path, "JPEG")
-                saved_paths.append(file_path)
+                crop_file_name = f"{request_id}_crop_{i}.jpg"
+                crop.save(os.path.join(self.crop_dir, crop_file_name), "JPEG")
 
-            # return crops
-            return saved_paths
+            return crops
         
         except Exception as e :
             logger.error("객체 탐지 중 오류 발생", exc_info=True)
