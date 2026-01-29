@@ -1,10 +1,48 @@
-# 비즈니스 로직 호출
-# 엔드 포인트를 나눠야 할 필요가 있는지? 고민
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services.detection import DetectionService
+from app.services.recognition import RecognitionService
+import logging
 
 router = APIRouter()
-detector = DetectionService("app/models/best.pt")
+
+detection_service = DetectionService("app/models/best.pt")
+recognization_service = RecognitionService(hf_token)
+
+logger = logging.getLogger("uvicorn.error")
+
+@router.post("/pills/analyzation")
+async def analyze_pill(file: UploadFile = File(...)) :
+    """알약 분석 엔드포인트
+
+    Args:
+        file(UploadFile): 요청에 포함된 파일(이미지)
+
+    Returns:
+        json 응답
+    """
+    crops_images = detection_service.detection_process(file)
+    if not crops_image :
+        logger.warning("탐지된 알약이 없습니다")
+        return {"status": "success", "message": "탐지된 알약이 없습니다.", "pills": []}
+    
+    pill_names = await recognization_service.recognize_all(crops_images)
+
+    # 식약처 API 연동 필요
+
+    final_pills = []
+    for i, res in enumerate(pill_names) :
+        final_pills.append({
+            "pill_index": i,
+            "pill_name": res.get("label"),
+            "confidence": res.get("score")
+        })
+
+    return {
+        "status": "success",
+        "total_detected": len(pill_names),
+        "pills": final_pills
+    }
+
 
 @router.post("/pills/detect")
 async def detect_pills(file: UploadFile = File(...)):
